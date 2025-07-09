@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Play Store Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            min-height: 100vh;
+        }
+        .sidebar {
+            background-color: #20232a;
+            color: white;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+        .main-content {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .card-header {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .chart-container {
+            height: 300px;
+            width: 100%;
+        }
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .summary-card .value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #4285f4;
+        }
+        .summary-card .label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .filter-section {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        select, input {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="sidebar">
+            <h2>Play Store Analytics</h2>
+            <div class="menu">
+                <div class="menu-item active">Dashboard</div>
+                <div class="menu-item">Category Analysis</div>
+                <div class="menu-item">Rating Trends</div>
+                <div class="menu-item">App Comparisons</div>
+                <div class="menu-item">Data Export</div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <div class="value" id="total-apps">-</div>
+                    <div class="label">Total Apps</div>
+                </div>
+                <div class="summary-card">
+                    <div class="value" id="avg-rating">-</div>
+                    <div class="label">Avg Rating</div>
+                </div>
+                <div class="summary-card">
+                    <div class="value" id="free-apps">-</div>
+                    <div class="label">Free Apps</div>
+                </div>
+                <div class="summary-card">
+                    <div class="value" id="paid-apps">-</div>
+                    <div class="label">Paid Apps</div>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <select id="category-filter">
+                    <option value="all">All Categories</option>
+                    <!-- Will be populated by JavaScript -->
+                </select>
+                <select id="type-filter">
+                    <option value="all">All Types</option>
+                    <option value="Free">Free</option>
+                    <option value="Paid">Paid</option>
+                </select>
+                <input type="number" id="min-rating" placeholder="Min Rating" min="1" max="5" step="0.1">
+                <input type="number" id="max-rating" placeholder="Max Rating" min="1" max="5" step="0.1">
+                <button id="apply-filters">Apply Filters</button>
+                <button id="reset-filters">Reset</button>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Rating Distribution</div>
+                <div class="chart-container" id="rating-distribution-chart"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Apps by Category</div>
+                <div class="chart-container" id="category-distribution-chart"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Rating vs. Installs</div>
+                <div class="chart-container" id="rating-installs-chart"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Top Rated Apps</div>
+                <div class="table-container">
+                    <table id="top-rated-table">
+                        <thead>
+                            <tr>
+                                <th>App</th>
+                                <th>Category</th>
+                                <th>Rating</th>
+                                <th>Installs</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Most Reviewed Apps</div>
+                <div class="table-container">
+                    <table id="most-reviewed-table">
+                        <thead>
+                            <tr>
+                                <th>App</th>
+                                <th>Category</th>
+                                <th>Reviews</th>
+                                <th>Rating</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample data - in a real application, you would load from CSV/API
+        let playStoreData = [];
+        
+        // Function to load data (simulated)
+        function loadData() {
+            // In a real app, you would use PapaParse to load CSV
+            // For this example, we'll use a small sample
+            playStoreData = [
+                {App: "Photo Editor & Candy Camera & Grid & ScrapBook", Category: "ART_AND_DESIGN", Rating: 4.1, Reviews: "159", Size: "19M", Installs: "10,000+", Type: "Free", Price: "0", "Content Rating": "Everyone", Genres: "Art & Design", "Last Updated": "January 7, 2018", "Current Ver": "1.0.0", "Android Ver": "4.0.3 and up"},
+                {App: "Coloring book moana", Category: "ART_AND_DESIGN", Rating: 3.9, Reviews: "967", Size: "14M", Installs: "500,000+", Type: "Free", Price: "0", "Content Rating": "Everyone", Genres: "Art & Design;Pretend Play", "Last Updated": "January 15, 2018", "Current Ver": "2.0.0", "Android Ver": "4.0.3 and up"},
+                {App: "U Launcher Lite – FREE Live Cool Themes, Hide Apps", Category: "ART_AND_DESIGN", Rating: 4.7, Reviews: "87510", Size: "8.7M", Installs: "5,000,000+", Type: "Free", Price: "0", "Content Rating": "Everyone", Genres: "Art & Design", "Last Updated": "August 1, 2018", "Current Ver": "1.2.4", "Android Ver": "4.0.3 and up"},
+                {App: "Sketch - Draw & Paint", Category: "ART_AND_DESIGN", Rating: 4.5, Reviews: "215644", Size: "25M", Installs: "50,000,000+", Type: "Free", Price: "0", "Content Rating": "Teen", Genres: "Art & Design", "Last Updated": "June 8, 2018", "Current Ver": "Varies with device", "Android Ver": "4.2 and up"},
+                {App: "Pixel Draw - Number Art Coloring Book", Category: "ART_AND_DESIGN", Rating: 4.3, Reviews: "967", Size: "2.8M", Installs: "100,000+", Type: "Free", Price: "0", "Content Rating": "Everyone", Genres: "Art & Design;Creativity", "Last Updated": "June 20, 2018", "Current Ver": "1.1", "Android Ver": "4.4 and up"},
+                {App: "Paper flowers instructions", Category: "ART_AND_DESIGN", Rating: 4.4, Reviews: "167", Size: "5.6M", Installs: "50,000+", Type: "Free", Price: "0", "Content Rating": "Everyone", Genres: "Art & Design", "Last Updated": "March 26, 2017", "Current Ver": "1.0", "Android Ver": "2.3 and up"},
+                {App: "Smoke Effect Photo Maker - Smoke Editor", Category: "ART_AND_DESIGN", Rating: 3.8, Reviews: "178", Size: "19M", Installs: "100,000+", Type: "Free", Price: "0", "Content Rating": "Everyone", Genres: "Art & Design", "Last Updated": "April 26, 2018", "Current Ver": "1.1", "Android Ver": "4.0.3 and up"},
+                {App: "Infinite Painter", Category: "ART_AND_DESIGN", Rating: 4.1, Reviews: "36815", Size: "14M", Installs: "1,000,000+", Type: "Free", Price: "0", "Content Rating": "Everyone", Genres: "Art & Design", "Last Updated": "June 14, 2018", "Current Ver": "6.1.61.1", "Android Ver": "4.2 and up"},
+                {App: "Garden Coloring Book", Category: "ART_AND_DESIGN", Rating: 4.4, Reviews: "13791", Size: "33M", Installs: "1,000,000+", Type: "Free", Price: "0", "Content Rating": "Everyone", Genres: "Art & Design", "Last Updated": "September 20, 2017", "Current Ver": "2.9.2", "Android Ver": "3.0 and up"},
+                {App: "Kids Paint Free - Drawing Fun", Category: "ART_AND_DESIGN", Rating: 4.7, Reviews: "12112", Size: "17M", Installs: "1,000,000+", Type: "Free", Price: "0", "Content Rating": "Everyone", Genres: "Art & Design;Creativity", "Last Updated": "July 3, 2018", "Current Ver": "2.8", "Android Ver": "4.0 and up"}
+            ];
+            
+            updateDashboard();
+        }
+        
+        // Function to update all dashboard components
+        function updateDashboard() {
+            updateSummaryCards();
+            updateRatingDistributionChart();
+            updateCategoryDistributionChart();
+            updateRatingInstallsChart();
+            updateTopRatedTable();
+            updateMostReviewedTable();
+            updateCategoryFilter();
+        }
+        
+        // Update summary cards
+        function updateSummaryCards() {
+            document.getElementById('total-apps').textContent = playStoreData.length;
+            
+            const ratings = playStoreData.map(app => app.Rating).filter(r => r);
+            const avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+            document.getElementById('avg-rating').textContent = avgRating.toFixed(2);
+            
+            const freeApps = playStoreData.filter(app => app.Type === "Free").length;
+            document.getElementById('free-apps').textContent = freeApps;
+            
+            const paidApps = playStoreData.filter(app => app.Type === "Paid").length;
+            document.getElementById('paid-apps').textContent = paidApps;
+        }
+        
+        // Update rating distribution chart
+        function updateRatingDistributionChart() {
+            const ratingCounts = {
+                "1-1.9": 0,
+                "2-2.9": 0,
+                "3-3.9": 0,
+                "4-4.9": 0,
+                "5": 0
+            };
+            
+            playStoreData.forEach(app => {
+                if (app.Rating) {
+                    if (app.Rating >= 4) ratingCounts["4-4.9"]++;
+                    else if (app.Rating >= 3) ratingCounts["3-3.9"]++;
+                    else if (app.Rating >= 2) ratingCounts["2-2.9"]++;
+                    else if (app.Rating >= 1) ratingCounts["1-1.9"]++;
+                    if (app.Rating === 5) ratingCounts["5"]++;
+                }
+            });
+            
+            const chart = echarts.init(document.getElementById('rating-distribution-chart'));
+            const option = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c} ({d}%)'
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 10,
+                    data: ['1-1.9', '2-2.9', '3-3.9', '4-4.9', '5']
+                },
+                series: [
+                    {
+                        name: 'Rating Distribution',
+                        type: 'pie',
+                        radius: ['50%', '70%'],
+                        avoidLabelOverlap: false,
+                        label: {
+                            show: false,
+                            position: 'center'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: '18',
+                                fontWeight: 'bold'
+                            }
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: [
+                            {value: ratingCounts["1-1.9"], name: '1-1.9'},
+                            {value: ratingCounts["2-2.9"], name: '2-2.9'},
+                            {value: ratingCounts["3-3.9"], name: '3-3.9'},
+                            {value: ratingCounts["4-4.9"], name: '4-4.9'},
+                            {value: ratingCounts["5"], name: '5'}
+                        ]
+                    }
+                ]
+            };
+            chart.setOption(option);
+        }
+        
+        // Update category distribution chart
+        function updateCategoryDistributionChart() {
+            const categoryCounts = {};
+            
+            playStoreData.forEach(app => {
+                if (categoryCounts[app.Category]) {
+                    categoryCounts[app.Category]++;
+                } else {
+                    categoryCounts[app.Category] = 1;
+                }
+            });
+            
+            const sortedCategories = Object.keys(categoryCounts).sort((a, b) => categoryCounts[b] - categoryCounts[a]);
+            const topCategories = sortedCategories.slice(0, 10);
+            
+            const chart = echarts.init(document.getElementById('category-distribution-chart'));
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                xAxis: {
+                    type: 'value',
+                    name: 'Number of Apps'
+                },
+                yAxis: {
+                    type: 'category',
+                    data: topCategories,
+                    name: 'Category'
+                },
+                series: [{
+                    name: 'Number of Apps',
+                    type: 'bar',
+                    data: topCategories.map(cat => categoryCounts[cat]),
+                    itemStyle: {
+                        color: function(params) {
+                            const colorList = ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC'];
+                            return colorList[params.dataIndex % colorList.length];
+                        }
+                    }
+                }]
+            };
+            chart.setOption(option);
+        }
+        
+        // Update rating vs installs chart
+        function updateRatingInstallsChart() {
+            // Process installs to numeric values
+            const data = playStoreData
+                .filter(app => app.Rating && app.Installs)
+                .map(app => {
+                    const installs = parseInt(app.Installs.replace(/[+,]/g, ''));
+                    return {
+                        rating: app.Rating,
+                        installs: installs,
+                        name: app.App
+                    };
+                });
+            
+            const chart = echarts.init(document.getElementById('rating-installs-chart'));
+            const option = {
+                tooltip: {
+                    formatter: function(params) {
+                        return `${params.data.name}<br/>Rating: ${params.data.rating}<br/>Installs: ${params.data.installs.toLocaleString()}`;
+                    }
+                },
+                xAxis: {
+                    name: 'Rating',
+                    min: 1,
+                    max: 5
+                },
+                yAxis: {
+                    name: 'Installs (log scale)',
+                    type: 'log',
+                    logBase: 10
+                },
+                series: [{
+                    symbolSize: function(data) {
+                        return Math.log(data.installs) * 2;
+                    },
+                    data: data,
+                    type: 'scatter'
+                }],
+                visualMap: {
+                    min: 1,
+                    max: 5,
+                    dimension: 0,
+                    inRange: {
+                        color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026']
+                    }
+                }
+            };
+            chart.setOption(option);
+        }
+        
+        // Update top rated apps table
+        function updateTopRatedTable() {
+            const tableBody = document.querySelector('#top-rated-table tbody');
+            tableBody.innerHTML = '';
+            
+            const sortedApps = [...playStoreData]
+                .filter(app => app.Rating)
+                .sort((a, b) => b.Rating - a.Rating)
+                .slice(0, 10);
+            
+            sortedApps.forEach(app => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${app.App}</td>
+                    <td>${app.Category}</td>
+                    <td>${app.Rating}</td>
+                    <td>${app.Installs}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+        
+        // Update most reviewed apps table
+        function updateMostReviewedTable() {
+            const tableBody = document.querySelector('#most-reviewed-table tbody');
+            tableBody.innerHTML = '';
+            
+            const sortedApps = [...playStoreData]
+                .filter(app => app.Reviews)
+                .sort((a, b) => parseInt(b.Reviews) - parseInt(a.Reviews))
+                .slice(0, 10);
+            
+            sortedApps.forEach(app => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${app.App}</td>
+                    <td>${app.Category}</td>
+                    <td>${parseInt(app.Reviews).toLocaleString()}</td>
+                    <td>${app.Rating || '-'}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+        
+        // Update category filter dropdown
+        function updateCategoryFilter() {
+            const categoryFilter = document.getElementById('category-filter');
+            
+            // Get unique categories
+            const categories = [...new Set(playStoreData.map(app => app.Category))].sort();
+            
+            // Clear existing options (except "All Categories")
+            while (categoryFilter.options.length > 1) {
+                categoryFilter.remove(1);
+            }
+            
+            // Add new options
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                categoryFilter.appendChild(option);
+            });
+        }
+        
+        // Filter data based on selected filters
+        function filterData() {
+            const category = document.getElementById('category-filter').value;
+            const type = document.getElementById('type-filter').value;
+            const minRating = parseFloat(document.getElementById('min-rating').value) || 1;
+            const maxRating = parseFloat(document.getElementById('max-rating').value) || 5;
+            
+            let filteredData = [...playStoreData];
+            
+            if (category !== 'all') {
+                filteredData = filteredData.filter(app => app.Category === category);
+            }
+            
+            if (type !== 'all') {
+                filteredData = filteredData.filter(app => app.Type === type);
+            }
+            
+            filteredData = filteredData.filter(app => {
+                if (!app.Rating) return false;
+                return app.Rating >= minRating && app.Rating <= maxRating;
+            });
+            
+            playStoreData = filteredData;
+            updateDashboard();
+        }
+        
+        // Reset filters
+        function resetFilters() {
+            document.getElementById('category-filter').value = 'all';
+            document.getElementById('type-filter').value = 'all';
+            document.getElementById('min-rating').value = '';
+            document.getElementById('max-rating').value = '';
+            
+            // Reload original data
+            loadData();
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            
+            // Add event listeners
+            document.getElementById('apply-filters').addEventListener('click', filterData);
+            document.getElementById('reset-filters').addEventListener('click', resetFilters);
+            
+            // Resize charts when window resizes
+            window.addEventListener('resize', function() {
+                echarts.getInstanceByDom(document.getElementById('rating-distribution-chart'))?.resize();
+                echarts.getInstanceByDom(document.getElementById('category-distribution-chart'))?.resize();
+                echarts.getInstanceByDom(document.getElementById('rating-installs-chart'))?.resize();
+            });
+        });
+    </script>
+</body>
+</html>
