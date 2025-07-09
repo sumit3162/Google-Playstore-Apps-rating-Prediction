@@ -85,7 +85,7 @@ Open `dashboard.html` in any modern browser to:
 ## ⚙️ Setup Instructions
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/Google-PlayStore-Data-Analysis.git
+git clone https://github.com/sumit3126/Google-PlayStore-Data-Analysis.git
 cd Google-PlayStore-Data-Analysis
 ```
 
